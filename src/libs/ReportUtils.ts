@@ -11200,12 +11200,6 @@ function getApprovalChain(policy: OnyxEntry<Policy>, expenseReport: OnyxEntry<Re
         return approvalChain;
     }
 
-    // Check if someone took control and it's still valid
-    const bypassApprover = getBypassApproverIfTakeControl(expenseReport);
-    if (bypassApprover && bypassApprover !== submitterEmail) {
-        return [bypassApprover];
-    }
-
     // Get category/tag approver list
     const ruleApprovers = getRuleApprovers(policy, expenseReport);
 
@@ -11237,6 +11231,26 @@ function getApprovalChain(policy: OnyxEntry<Policy>, expenseReport: OnyxEntry<Re
         fullApprovalChain.pop();
     }
     return fullApprovalChain;
+}
+
+/**
+ * Get the approval chain with bypass approver logic
+ */
+function getApprovalChainWithBypassApprover(policy: OnyxEntry<Policy>, expenseReport: OnyxEntry<Report>): string[] {
+    const submitterEmail = getLoginsByAccountIDs([expenseReport?.ownerAccountID ?? CONST.DEFAULT_NUMBER_ID]).at(0) ?? '';
+
+    if (isSubmitAndClose(policy)) {
+        return [];
+    }
+
+    // Check if someone took control and it's still valid
+    const bypassApprover = getBypassApproverIfTakeControl(expenseReport);
+    if (bypassApprover && bypassApprover !== submitterEmail) {
+        return [bypassApprover];
+    }
+
+    // If no bypass approver, return the regular approval chain
+    return getApprovalChain(policy, expenseReport);
 }
 
 /**
@@ -11845,6 +11859,7 @@ export {
     isPayAtEndExpenseReport,
     getArchiveReason,
     getApprovalChain,
+    getApprovalChainWithBypassApprover,
     isIndividualInvoiceRoom,
     hasOutstandingChildRequest,
     isAuditor,

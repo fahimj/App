@@ -36,6 +36,7 @@ import {
     getAllAncestorReportActions,
     getAllReportActionsErrorsAndReportActionThatRequiresAttention,
     getApprovalChain,
+    getApprovalChainWithBypassApprover,
     getChatByParticipants,
     getChatRoomSubtitle,
     getDefaultWorkspaceAvatar,
@@ -3551,47 +3552,68 @@ describe('ReportUtils', () => {
                 });
             });
         });
+    });
 
-        describe('take control functionality', () => {
-            const adminAccountID = 1; // From personalDetails
-            const managerAccountID = 9; // From personalDetails
-            const adminEmail = 'admin@test.com';
-            const managerEmail = 'manager@test.com'; // Use the new manager email
+    describe('getApprovalChainWithBypassApprover', () => {
+        const adminAccountID = 1; // From personalDetails
+        const managerAccountID = 9; // From personalDetails
+        const adminEmail = 'admin@test.com';
+        const managerEmail = 'manager@test.com';
 
-            // Create a multi-level employee list with approval hierarchy
-            const multiLevelEmployeeList: PolicyEmployeeList = {
-                ...employeeList,
-                'employee@test.com': {
-                    email: 'employee@test.com',
-                    role: 'user',
-                    submitsTo: 'manager@test.com', // Employee submits to manager
-                },
-                'manager@test.com': {
-                    email: 'manager@test.com',
-                    role: 'user',
-                    submitsTo: 'admin@test.com', // Manager submits to admin
-                    forwardsTo: 'admin@test.com', // Manager forwards to admin
-                },
-                'admin@test.com': {
-                    email: 'admin@test.com',
-                    role: 'admin',
-                    submitsTo: '', // Admin is the final approver
-                    forwardsTo: '', // Admin doesn't forward to anyone
-                },
-            };
+        // Create a multi-level employee list with approval hierarchy
+        const multiLevelEmployeeList: PolicyEmployeeList = {
+            ...employeeList,
+            'employee@test.com': {
+                email: 'employee@test.com',
+                role: 'user',
+                submitsTo: 'manager@test.com', // Employee submits to manager
+            },
+            'manager@test.com': {
+                email: 'manager@test.com',
+                role: 'user',
+                submitsTo: 'admin@test.com', // Manager submits to admin
+                forwardsTo: 'admin@test.com', // Manager forwards to admin
+            },
+            'admin@test.com': {
+                email: 'admin@test.com',
+                role: 'admin',
+                submitsTo: '', // Admin is the final approver
+                forwardsTo: '', // Admin doesn't forward to anyone
+            },
+        };
 
-            beforeEach(async () => {
-                await Onyx.set(ONYXKEYS.PERSONAL_DETAILS_LIST, personalDetails);
+        beforeEach(async () => {
+            await Onyx.set(ONYXKEYS.PERSONAL_DETAILS_LIST, personalDetails);
+        });
+
+        afterEach(async () => {
+            await Onyx.clear();
+            await Onyx.set(ONYXKEYS.SESSION, {email: currentUserEmail, accountID: currentUserAccountID});
+        });
+
+        describe('submit and close policy', () => {
+            it('should return empty array', () => {
+                const policyTest: Policy = {
+                    ...createRandomPolicy(0),
+                    approver: 'owner@test.com',
+                    owner: 'owner@test.com',
+                    type: CONST.POLICY.TYPE.TEAM,
+                    approvalMode: CONST.POLICY.APPROVAL_MODE.OPTIONAL,
+                };
+                const expenseReport: Report = {
+                    ...createRandomReport(0),
+                    ownerAccountID: employeeAccountID,
+                    type: CONST.REPORT.TYPE.EXPENSE,
+                };
+
+                expect(getApprovalChainWithBypassApprover(policyTest, expenseReport)).toStrictEqual([]);
             });
+        });
 
-            afterEach(async () => {
-                await Onyx.clear();
-                await Onyx.set(ONYXKEYS.SESSION, {email: currentUserEmail, accountID: currentUserAccountID});
-            });
-
+        describe('bypass approver functionality', () => {
             it('should return admin as sole approver when admin takes control', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1001),
+                    ...createRandomPolicy(2001),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3600,14 +3622,14 @@ describe('ReportUtils', () => {
                 };
 
                 const expenseReport: Report = {
-                    ...createRandomReport(1001),
+                    ...createRandomReport(2001),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Create a TAKE_CONTROL action by admin
                 const takeControlAction: ReportAction = {
-                    ...createRandomReportAction(1001),
+                    ...createRandomReportAction(2001),
                     actionName: CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
                     actorAccountID: adminAccountID,
                     created: '2023-01-01T10:00:00.000Z',
@@ -3617,13 +3639,13 @@ describe('ReportUtils', () => {
                     [takeControlAction.reportActionID]: takeControlAction,
                 });
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 expect(result).toStrictEqual([adminEmail]);
             });
 
             it('should return normal approval chain when no take control action exists', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1002),
+                    ...createRandomPolicy(2002),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3631,18 +3653,18 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1002),
+                    ...createRandomReport(2002),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 expect(result).toStrictEqual(['manager@test.com', 'admin@test.com']);
             });
 
             it('should invalidate take control when report is resubmitted after take control', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1003),
+                    ...createRandomPolicy(2003),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3650,14 +3672,14 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1003),
+                    ...createRandomReport(2003),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Create a TAKE_CONTROL action first
                 const takeControlAction: ReportAction = {
-                    ...createRandomReportAction(1003),
+                    ...createRandomReportAction(2003),
                     actionName: CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
                     actorAccountID: adminAccountID,
                     created: '2023-01-01T10:00:00.000Z',
@@ -3665,7 +3687,7 @@ describe('ReportUtils', () => {
 
                 // Create a SUBMITTED action after take control (invalidates it)
                 const submittedAction: ReportAction = {
-                    ...createRandomReportAction(1004),
+                    ...createRandomReportAction(2004),
                     actionName: CONST.REPORT.ACTIONS.TYPE.SUBMITTED,
                     actorAccountID: employeeAccountID,
                     created: '2023-01-01T11:00:00.000Z', // After take control
@@ -3676,14 +3698,14 @@ describe('ReportUtils', () => {
                     [submittedAction.reportActionID]: submittedAction,
                 });
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 // Should return normal approval chain since take control was invalidated
                 expect(result).toStrictEqual(['manager@test.com', 'admin@test.com']);
             });
 
             it('should invalidate take control when report is submitted and closed after take control', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1005),
+                    ...createRandomPolicy(2005),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3691,14 +3713,14 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1005),
+                    ...createRandomReport(2005),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Create a TAKE_CONTROL action first
                 const takeControlAction: ReportAction = {
-                    ...createRandomReportAction(1005),
+                    ...createRandomReportAction(2005),
                     actionName: CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
                     actorAccountID: managerAccountID,
                     created: '2023-01-01T10:00:00.000Z',
@@ -3706,7 +3728,7 @@ describe('ReportUtils', () => {
 
                 // Create a SUBMITTED_AND_CLOSED action after take control (invalidates it)
                 const submittedAndClosedAction: ReportAction = {
-                    ...createRandomReportAction(1006),
+                    ...createRandomReportAction(2006),
                     actionName: CONST.REPORT.ACTIONS.TYPE.SUBMITTED_AND_CLOSED,
                     actorAccountID: employeeAccountID,
                     created: '2023-01-01T11:00:00.000Z', // After take control
@@ -3717,14 +3739,14 @@ describe('ReportUtils', () => {
                     [submittedAndClosedAction.reportActionID]: submittedAndClosedAction,
                 });
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 // Should return normal approval chain since take control was invalidated
                 expect(result).toStrictEqual(['manager@test.com', 'admin@test.com']);
             });
 
             it('should keep take control valid when submitted action happened before take control', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1007),
+                    ...createRandomPolicy(2007),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3732,14 +3754,14 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1007),
+                    ...createRandomReport(2007),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Create a SUBMITTED action first
                 const submittedAction: ReportAction = {
-                    ...createRandomReportAction(1007),
+                    ...createRandomReportAction(2007),
                     actionName: CONST.REPORT.ACTIONS.TYPE.SUBMITTED,
                     actorAccountID: employeeAccountID,
                     created: '2023-01-01T09:00:00.000Z', // Before take control
@@ -3747,7 +3769,7 @@ describe('ReportUtils', () => {
 
                 // Create a TAKE_CONTROL action after submission
                 const takeControlAction: ReportAction = {
-                    ...createRandomReportAction(1008),
+                    ...createRandomReportAction(2008),
                     actionName: CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
                     actorAccountID: adminAccountID,
                     created: '2023-01-01T10:00:00.000Z', // After submission
@@ -3758,14 +3780,14 @@ describe('ReportUtils', () => {
                     [takeControlAction.reportActionID]: takeControlAction,
                 });
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 // Should return admin as sole approver since take control is valid
                 expect(result).toStrictEqual([adminEmail]);
             });
 
             it('should not return submitter as approver even if they take control', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1009),
+                    ...createRandomPolicy(2009),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3773,14 +3795,14 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1009),
+                    ...createRandomReport(2009),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Employee (submitter) tries to take control
                 const takeControlAction: ReportAction = {
-                    ...createRandomReportAction(1009),
+                    ...createRandomReportAction(2009),
                     actionName: CONST.REPORT.ACTIONS.TYPE.TAKE_CONTROL,
                     actorAccountID: employeeAccountID, // Same as report owner
                     created: '2023-01-01T10:00:00.000Z',
@@ -3790,14 +3812,14 @@ describe('ReportUtils', () => {
                     [takeControlAction.reportActionID]: takeControlAction,
                 });
 
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 // Should return normal approval chain, not the submitter
                 expect(result).toStrictEqual(['manager@test.com', 'admin@test.com']);
             });
 
             it('should handle empty or missing report actions gracefully', async () => {
                 const policyTest: Policy = {
-                    ...createRandomPolicy(1010),
+                    ...createRandomPolicy(2010),
                     approver: 'owner@test.com',
                     owner: 'owner@test.com',
                     type: CONST.POLICY.TYPE.CORPORATE,
@@ -3805,13 +3827,13 @@ describe('ReportUtils', () => {
                     approvalMode: CONST.POLICY.APPROVAL_MODE.ADVANCED,
                 };
                 const expenseReport: Report = {
-                    ...createRandomReport(1010),
+                    ...createRandomReport(2010),
                     ownerAccountID: employeeAccountID,
                     type: CONST.REPORT.TYPE.EXPENSE,
                 };
 
                 // Don't set any report actions
-                const result = getApprovalChain(policyTest, expenseReport);
+                const result = getApprovalChainWithBypassApprover(policyTest, expenseReport);
                 // Should return normal approval chain
                 expect(result).toStrictEqual(['manager@test.com', 'admin@test.com']);
             });

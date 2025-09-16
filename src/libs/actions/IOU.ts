@@ -140,6 +140,7 @@ import {
     getAllHeldTransactions as getAllHeldTransactionsReportUtils,
     getAllPolicyReports,
     getApprovalChain,
+    getApprovalChainWithBypassApprover,
     getChatByParticipants,
     getDisplayedReportID,
     getMoneyRequestSpendBreakdown,
@@ -9670,7 +9671,7 @@ function approveMoneyRequest(expenseReport: OnyxEntry<OnyxTypes.Report>, full?: 
 
     // This will be fixed as part of https://github.com/Expensify/Expensify/issues/507850
     // eslint-disable-next-line deprecation/deprecation
-    const approvalChain = getApprovalChain(getPolicy(expenseReport.policyID), expenseReport);
+    const approvalChain = getApprovalChainWithBypassApprover(getPolicy(expenseReport.policyID), expenseReport);
 
     const predictedNextStatus = isLastApprover(approvalChain) ? CONST.REPORT.STATUS_NUM.APPROVED : CONST.REPORT.STATUS_NUM.SUBMITTED;
     const predictedNextState = isLastApprover(approvalChain) ? CONST.REPORT.STATE_NUM.APPROVED : CONST.REPORT.STATE_NUM.SUBMITTED;

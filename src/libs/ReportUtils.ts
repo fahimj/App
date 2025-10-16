@@ -4349,6 +4349,11 @@ function getNextApproverAccountID(report: OnyxEntry<Report>, isUnapproved = fals
         return submitToAccountID;
     }
 
+    // If there's only one approver in the chain and it's the current user, they are the final approver
+    if (approvalChain.length === 1 && approvalChain.at(0) === currentUserEmail) {
+        return undefined;
+    }
+
     const nextApproverEmail = approvalChain.length === 1 ? approvalChain.at(0) : approvalChain.at(approvalChain.indexOf(currentUserEmail ?? '') + 1);
     if (!nextApproverEmail) {
         // If there's no next approver in the chain, return undefined to indicate the current user is the final approver
